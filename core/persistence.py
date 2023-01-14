@@ -141,17 +141,17 @@ class BlockedConnectionMixin(AsyncDatabaseConnection):
 
 
 class HighlightConnectionMixin(AsyncDatabaseConnection):
-    async def insert_highlight(self, user_id: int, query: str) -> None:
-        await self.execute("INSERT OR IGNORE INTO highlight VALUES (?, ?)", (user_id, query))
+    async def insert_highlight(self, user_id: int, query: str, guild_id: int = 0) -> None:
+        await self.execute("INSERT OR IGNORE INTO highlight VALUES (?, ?, ?)", (user_id, query, guild_id))
 
-    async def fetch_highlight(self, user_id: int, query: str) -> Optional[sqlite3.Row]:
-        return await self.execute_fetchone("SELECT * FROM highlight WHERE user_id = ? AND query = ?", (user_id, query))
+    async def fetch_highlight(self, user_id: int, query: str, guild_id: int = 0) -> Optional[sqlite3.Row]:
+        return await self.execute_fetchone("SELECT * FROM highlight WHERE user_id = ? AND query = ? AND guild_id = ?", (user_id, query, guild_id))
 
     async def fetch_highlights(self) -> Iterable[sqlite3.Row]:
         return await self.execute_fetchall("SELECT * FROM highlight")
 
     async def fetch_user_highlights(self, user_id: int) -> Tuple[str, ...]:
-        rows = await self.execute_fetchall("SELECT query FROM highlight WHERE user_id = ?", (user_id,))
+        rows = await self.execute_fetchall("SELECT guild_id, query FROM highlight WHERE user_id = ?", (user_id,))
         return tuple(row[0] for row in rows)
 
     async def fetch_user_highlight_count(self, user_id: int) -> int:
@@ -159,12 +159,12 @@ class HighlightConnectionMixin(AsyncDatabaseConnection):
 
     async def fetch_user_highlights_starting_with(self, user_id: int, prefix: str) -> Tuple[str, ...]:
         rows = await self.execute_fetchall(
-            "SELECT query FROM highlight WHERE user_id = ? AND query LIKE ?", (user_id, f"{prefix}%")
+            "SELECT guild_id, query FROM highlight WHERE user_id = ? AND query LIKE ?", (user_id, f"{prefix}%")
         )
         return tuple(row[0] for row in rows)
 
-    async def delete_highlight(self, user_id: int, query: str) -> None:
-        await self.execute("DELETE FROM highlight WHERE user_id = ? AND query = ?", (user_id, query))
+    async def delete_highlight(self, user_id: int, query: str, guild_id: int = 0) -> None:
+        await self.execute("DELETE FROM highlight WHERE user_id = ? AND query = ? AND guild_id = ?", (user_id, query, guild_id))
 
     async def clear_user_highlights(self, user_id: int) -> None:
         await self.execute("DELETE FROM highlight WHERE user_id = ?", (user_id,))
@@ -246,7 +246,8 @@ class QuoteBotDatabaseConnection(
             IF NOT EXISTS highlight (
                 user_id INTEGER NOT NULL,
                 query TEXT NOT NULL,
-                PRIMARY KEY (user_id, query)
+                guild_id INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (user_id, query, guild_id)
             );
             CREATE TABLE
             IF NOT EXISTS blocked (

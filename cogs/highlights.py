@@ -36,8 +36,22 @@ def _should_send_highlight(msg: discord.Message, member: discord.Member, query: 
         and msg.channel.permissions_for(member).read_messages
     )
 
+class OptionalGuildConverter(commands.converter.GuildConverter):
+    async def convert(self, ctx: commands.Context, argument: str) -> discord.Guild | None:
+        if argument == "0":
+            return None
+        return await super().convert(ctx, argument)
+
+
+OptionalCurrentGuild = commands.parameter(
+    default=lambda ctx: ctx.guild,
+    displayed_default='<this server>',
+    converter=OptionalGuildConverter,
+)
 
 class Highlights(commands.Cog):
+    server_option = re.compile(r" *(?:-s|--server) ?(?P<id>\d+)? *")
+
     def __init__(self, bot: QuoteBot) -> None:
         self.bot = bot
 
@@ -53,10 +67,12 @@ class Highlights(commands.Cog):
         self, con: QuoteBotDatabaseConnection, msg: discord.Message, highlights: Iterable[sqlite3.Row]
     ) -> None:
         seen_user_ids = set()
-        for user_id, query in highlights:
+        for user_id, query, guild_id in highlights:
             if not self.bot.get_user(user_id):
                 await con.clear_user_highlights(user_id)
             elif not (member := msg.guild.get_member(user_id)):
+                continue
+            elif guild_id and guild_id != msg.guild.id:
                 continue
             elif user_id not in seen_user_ids and _should_send_highlight(msg, member, query):
                 seen_user_ids.add(user_id)
@@ -68,10 +84,15 @@ class Highlights(commands.Cog):
                     continue
         await con.commit()
 
+    def _get_guild_id(self, server: discord.Guild | None) -> int:
+        return (server and server.id) or 0
+
     @commands.hybrid_command(aliases=["hl", "hladd"])
-    async def highlight(self, ctx: commands.Context, *, pattern: str) -> None:
+    async def highlight(self, ctx: commands.Context, pattern: str, server: discord.Guild | None = OptionalCurrentGuild) -> None:
         """
         Highlight mutual server messages matching a regex pattern of up to 50 characters to your DMs.
+
+        server: id or name for a server specific highlight, 0 for global. Default: current server / 0 on DM.
 
         Requires allowing direct messages from server members in your 'Privacy & Safety' settings.
         """
@@ -96,18 +117,19 @@ class Highlights(commands.Cog):
             if await con.fetch_user_highlight_count(user_id := ctx.author.id) >= 10:
                 await ctx.send(":x: **Highlight limit exceeded.**")
                 return
-            await con.insert_highlight(user_id, pattern)
+            await con.insert_highlight(user_id, pattern, self._get_guild_id(server))
             await con.commit()
         await ctx.send(f":white_check_mark: **Highlight pattern `{pattern.replace('`', '')}` added.**")
 
     @commands.hybrid_command(aliases=["highlights", "hllist"])
-    async def highlightlist(self, ctx: commands.Context) -> None:
+    async def highlightlist(self, ctx: commands.Context, server: discord.Guild | None = OptionalCurrentGuild) -> None:
         """List your Highlights."""
         async with self.bot.db_connect() as con:
             highlights = await con.fetch_user_highlights(ctx.author.id)
         if highlights:
+            highlight_table = (" | ".join(f"`{str(hl).replace('`', '')}`" for hl in row) for row in highlights)
             embed = discord.Embed(
-                description="\n".join(f"`{highlight.replace('`', '')}`" for highlight in highlights),
+                description="\n".join(highlight_table),
                 color=ctx.author.color.value,
             )
             embed.set_author(
