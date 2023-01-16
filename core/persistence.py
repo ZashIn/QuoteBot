@@ -261,6 +261,14 @@ class QuoteBotDatabaseConnection(
                 DELETE FROM saved_quote
                 WHERE owner_id = old.guild_id;
             END;
+
+            CREATE TRIGGER
+            IF NOT EXISTS delete_guild_highlights
+                AFTER DELETE ON guild
+            BEGIN
+                DELETE FROM highlight
+                WHERE guild_id = old.guild_id;
+            END;
         """
         )
         await self.commit()
