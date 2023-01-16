@@ -36,6 +36,7 @@ def _should_send_highlight(msg: discord.Message, member: discord.Member, query: 
         and msg.channel.permissions_for(member).read_messages
     )
 
+
 class OptionalGuildConverter(commands.converter.GuildConverter):
     async def convert(self, ctx: commands.Context, argument: str) -> discord.Guild | None:
         if argument == "0":
@@ -45,9 +46,10 @@ class OptionalGuildConverter(commands.converter.GuildConverter):
 
 OptionalCurrentGuild = commands.parameter(
     default=lambda ctx: ctx.guild,
-    displayed_default='<this server>',
+    displayed_default="<this server>",
     converter=OptionalGuildConverter,
 )
+
 
 class Highlights(commands.Cog):
     server_option = re.compile(r" *(?:-s|--server) ?(?P<id>\d+)? *")
@@ -88,7 +90,9 @@ class Highlights(commands.Cog):
         return (server and server.id) or 0
 
     @commands.hybrid_command(aliases=["hl", "hladd"])
-    async def highlight(self, ctx: commands.Context, pattern: str, server: discord.Guild | None = OptionalCurrentGuild) -> None:
+    async def highlight(
+        self, ctx: commands.Context, pattern: str, server: discord.Guild | None = OptionalCurrentGuild
+    ) -> None:
         """
         Highlight mutual server messages matching a regex pattern of up to 50 characters to your DMs.
 
@@ -123,9 +127,9 @@ class Highlights(commands.Cog):
 
     @commands.hybrid_command(aliases=["highlights", "hllist"])
     async def highlightlist(self, ctx: commands.Context, server: discord.Guild | None = OptionalCurrentGuild) -> None:
-        """List your Highlights."""
+        """List your Highlights on the server (0 = all)."""
         async with self.bot.db_connect() as con:
-            highlights = await con.fetch_user_highlights(ctx.author.id)
+            highlights = await con.fetch_user_highlights(ctx.author.id, self._get_guild_id(server))
         if highlights:
             highlight_table = (" | ".join(f"`{str(hl).replace('`', '')}`" for hl in row) for row in highlights)
             embed = discord.Embed(
@@ -141,13 +145,16 @@ class Highlights(commands.Cog):
             await ctx.send(":x: **You don't have any Highlights.**")
 
     @commands.hybrid_command(aliases=["hlremove", "hldelete", "hldel"])
-    async def highlightremove(self, ctx: commands.Context, *, pattern: str) -> None:
-        """Remove a Highlight."""
+    async def highlightremove(
+        self, ctx: commands.Context, pattern: str, server: discord.Guild | None = OptionalCurrentGuild
+    ) -> None:
+        """Remove a Highlight from the server (0 = from all servers)."""
+        guild_id = self._get_guild_id(server)
         async with self.bot.db_connect() as con:
-            if await con.fetch_highlight(user_id := ctx.author.id, pattern):
-                await con.delete_highlight(user_id, pattern)
-            elif len(matches := await con.fetch_user_highlights_starting_with(user_id, pattern)) == 1:
-                await con.delete_highlight(user_id, pattern := matches[0][0])
+            if await con.fetch_highlight(user_id := ctx.author.id, pattern, guild_id):
+                await con.delete_highlight(user_id, pattern, guild_id)
+            elif len(matches := await con.fetch_user_highlights_starting_with(user_id, pattern, guild_id)) == 1:
+                await con.delete_highlight(user_id, pattern := matches[0][0], guild_id)
             else:
                 await ctx.send(":x: **Highlight not found.**")
                 return
@@ -166,10 +173,10 @@ class Highlights(commands.Cog):
             ][:25]
 
     @commands.hybrid_command(aliases=["hlclear"])
-    async def highlightclear(self, ctx: commands.Context) -> None:
-        """Clear all your Highlights."""
+    async def highlightclear(self, ctx: commands.Context, server: discord.Guild | None = OptionalCurrentGuild) -> None:
+        """Clear all your Highlights on the server (0 = all)."""
         async with self.bot.db_connect() as con:
-            await con.clear_user_highlights(ctx.author.id)
+            await con.clear_user_highlights(ctx.author.id, self._get_guild_id(server))
             await con.commit()
         await ctx.send(":white_check_mark: **Cleared all your Highlights.**")
 
