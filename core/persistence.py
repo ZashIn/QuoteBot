@@ -154,14 +154,14 @@ class HighlightConnectionMixin(AsyncDatabaseConnection):
             return await self.execute_fetchall("SELECT * FROM highlight WHERE guild_id = ?", (guild_id))
         return await self.execute_fetchall("SELECT * FROM highlight")
 
-    async def fetch_user_highlights(self, user_id: int, guild_id=0) -> Tuple[Tuple[str, ...], ...]:
+    async def fetch_user_highlights(self, user_id: int, guild_id: int = 0) -> Tuple[Tuple[str, int], ...]:
         if guild_id:
             rows = await self.execute_fetchall(
                 "SELECT query, guild_id FROM highlight WHERE user_id = ? AND guild_id = ?", (user_id, guild_id)
             )
         else:
             rows = await self.execute_fetchall("SELECT query, guild_id FROM highlight WHERE user_id = ?", (user_id,))
-        return tuple(tuple(str(i) for i in row) for row in rows)
+        return tuple(tuple(row) for row in rows)
 
     async def fetch_user_highlight_count(self, user_id: int) -> int:
         return (await self.execute_fetchone("SELECT COUNT(query) FROM highlight WHERE user_id = ?", (user_id,)))[0]  # type: ignore
@@ -190,9 +190,9 @@ class HighlightConnectionMixin(AsyncDatabaseConnection):
 
     async def clear_user_highlights(self, user_id: int, guild_id: int = 0) -> None:
         if guild_id:
-            await self.execute("DELETE FROM highlight WHERE user_id = ?", (user_id,))
-        else:
             await self.execute("DELETE FROM highlight WHERE user_id = ? AND guild_id = ?", (user_id, guild_id))
+        else:
+            await self.execute("DELETE FROM highlight WHERE user_id = ?", (user_id,))
 
 
 class SavedQuoteConnectionMixin(AsyncDatabaseConnection):

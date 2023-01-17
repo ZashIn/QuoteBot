@@ -14,9 +14,10 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
+import itertools
 import re
 import sqlite3
-from typing import Iterable, List
+from typing import Iterable
 
 import discord
 from discord import app_commands
@@ -87,7 +88,7 @@ class Highlights(commands.Cog):
         await con.commit()
 
     def _get_guild_id(self, server: discord.Guild | None) -> int:
-        return (server and server.id) or 0
+        return server.id if server else 0
 
     @commands.hybrid_command(aliases=["hl", "hladd"])
     async def highlight(
@@ -131,9 +132,8 @@ class Highlights(commands.Cog):
         async with self.bot.db_connect() as con:
             highlights = await con.fetch_user_highlights(ctx.author.id, self._get_guild_id(server))
         if highlights:
-            highlight_table = (" | ".join(f"`{str(hl).replace('`', '')}`" for hl in row) for row in highlights)
             embed = discord.Embed(
-                description="\n".join(highlight_table),
+                description=self._hightlight_table_str(highlights, ctx),
                 color=ctx.author.color.value,
             )
             embed.set_author(
@@ -143,6 +143,15 @@ class Highlights(commands.Cog):
             await ctx.send(embed=embed)
         else:
             await ctx.send(":x: **You don't have any Highlights.**")
+
+    def _hightlight_table_str(self, highlights: tuple[tuple[str, int], ...], ctx: commands.Context) -> str:
+        hl_table: list[tuple[str, str]] = [("pattern", "server")]
+        max_pattern_len = len("pattern")
+        for pattern, gid in highlights:
+            max_pattern_len = max(max_pattern_len, len(pattern))
+            gid = f"{gid} : {ctx.bot.get_guild(gid).name}" if gid else "0"
+            hl_table.append((pattern.replace('`', ''), gid))
+        return "\n".join(f"`{pattern:<{max_pattern_len}}  {gid}`" for pattern, gid in hl_table)
 
     @commands.hybrid_command(aliases=["hlremove", "hldelete", "hldel"])
     async def highlightremove(
@@ -162,7 +171,7 @@ class Highlights(commands.Cog):
         await ctx.send(f":white_check_mark: **Highlight pattern `{pattern.replace('`', '')}` removed.**")
 
     @highlightremove.autocomplete("pattern")
-    async def _pattern_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice[str]]:
+    async def _pattern_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
         async with self.bot.db_connect() as con:
             return [
                 app_commands.Choice(
