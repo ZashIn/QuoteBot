@@ -124,7 +124,10 @@ class Highlights(commands.Cog):
                 return
             await con.insert_highlight(user_id, pattern, self._get_guild_id(server))
             await con.commit()
-        await ctx.send(f":white_check_mark: **Highlight pattern `{pattern.replace('`', '')}` added.**")
+        await ctx.send(f":white_check_mark: **Highlight pattern `{pattern.replace('`', '')}` added {self._server_text(server)}.**")
+
+    def _server_text(self, server, pre="", no_server="globally"):
+        return f"{pre}for server `{server.name} ({server.id})`" if server else no_server
 
     @commands.hybrid_command(aliases=["highlights", "hllist"])
     async def highlightlist(self, ctx: commands.Context, server: discord.Guild | None = OptionalCurrentGuild) -> None:
@@ -142,16 +145,17 @@ class Highlights(commands.Cog):
             )
             await ctx.send(embed=embed)
         else:
-            await ctx.send(":x: **You don't have any Highlights.**")
+            await ctx.send(f":x: **You don't have any Highlights{self._server_text(server, ' ', '')}.**")
 
     def _hightlight_table_str(self, highlights: tuple[tuple[str, int], ...], ctx: commands.Context) -> str:
-        hl_table: list[tuple[str, str]] = [("pattern", "server")]
+        hl_table = []
         max_pattern_len = len("pattern")
         for pattern, gid in highlights:
             max_pattern_len = max(max_pattern_len, len(pattern))
             gid = f"{gid} : {ctx.bot.get_guild(gid).name}" if gid else "0"
             hl_table.append((pattern.replace('`', ''), gid))
-        return "\n".join(f"`{pattern:<{max_pattern_len}}  {gid}`" for pattern, gid in hl_table)
+        header = f"*`{'pattern':<{max_pattern_len}}  server`*\n"  # aligned italic header
+        return header + "\n".join(f"`{pattern:<{max_pattern_len}}  {gid}`" for pattern, gid in hl_table)
 
     @commands.hybrid_command(aliases=["hlremove", "hldelete", "hldel"])
     async def highlightremove(
@@ -168,7 +172,7 @@ class Highlights(commands.Cog):
                 await ctx.send(":x: **Highlight not found.**")
                 return
             await con.commit()
-        await ctx.send(f":white_check_mark: **Highlight pattern `{pattern.replace('`', '')}` removed.**")
+        await ctx.send(f":white_check_mark: **Highlight pattern `{pattern.replace('`', '')}` removed {self._server_text(server)}.**")
 
     @highlightremove.autocomplete("pattern")
     async def _pattern_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
@@ -187,7 +191,7 @@ class Highlights(commands.Cog):
         async with self.bot.db_connect() as con:
             await con.clear_user_highlights(ctx.author.id, self._get_guild_id(server))
             await con.commit()
-        await ctx.send(":white_check_mark: **Cleared all your Highlights.**")
+        await ctx.send(f":white_check_mark: **Cleared all your Highlights{self._server_text(server, ' ', '')}.**")
 
 
 async def setup(bot: QuoteBot) -> None:
