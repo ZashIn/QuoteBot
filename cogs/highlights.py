@@ -14,7 +14,6 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <https://www.gnu.org/licenses/>.
 """
-import itertools
 import re
 import sqlite3
 from typing import Iterable
@@ -182,7 +181,7 @@ class Highlights(commands.Cog):
                     name=pattern,
                     value=pattern,
                 )
-                for pattern in await con.fetch_user_highlights_starting_with(interaction.user.id, current)
+                for pattern, _ in await con.fetch_user_highlights_starting_with(interaction.user.id, current)
             ][:25]
 
     @commands.hybrid_command(aliases=["hlclear"])

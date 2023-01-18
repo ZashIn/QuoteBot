@@ -168,7 +168,7 @@ class HighlightConnectionMixin(AsyncDatabaseConnection):
 
     async def fetch_user_highlights_starting_with(
         self, user_id: int, prefix: str, guild_id: int = 0
-    ) -> Tuple[Tuple[str, ...], ...]:
+    ) -> Tuple[Tuple[str, str], ...]:
         if guild_id:
             rows = await self.execute_fetchall(
                 "SELECT query, guild_id FROM highlight WHERE user_id = ? AND guild_id = ? AND query LIKE ?",
