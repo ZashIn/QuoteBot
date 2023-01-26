@@ -19,7 +19,7 @@ async def upgrade_db():
             ;
             DROP TABLE highlight;
             ALTER TABLE h_temp
-                RENAME TO hightlight
+                RENAME TO highlight
             ;
             CREATE TRIGGER
                 IF NOT EXISTS delete_guild_highlights
